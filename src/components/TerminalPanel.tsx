@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface TerminalPanelProps {
   sessionId: string | null;
@@ -13,51 +13,21 @@ export default function TerminalPanel({ sessionId, ws, isActive, onSessionCreate
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<any>(null);
   const fitAddonRef = useRef<any>(null);
+  const sessionIdRef = useRef<string | null>(sessionId);
+  const wsRef = useRef<WebSocket | null>(ws);
+  const onSessionCreatedRef = useRef(onSessionCreated);
   const [status, setStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
-  const attachedRef = useRef(false);
 
-  const handleWsMessage = useCallback(
-    (event: MessageEvent) => {
-      try {
-        const msg = JSON.parse(event.data);
+  // Keep refs in sync with props
+  sessionIdRef.current = sessionId;
+  wsRef.current = ws;
+  onSessionCreatedRef.current = onSessionCreated;
 
-        if (msg.sessionId && msg.sessionId !== sessionId && msg.sessionId !== 'pending') return;
-
-        switch (msg.type) {
-          case 'created':
-            if (onSessionCreated) onSessionCreated(msg.sessionId);
-            setStatus('connected');
-            break;
-
-          case 'attached':
-            setStatus('connected');
-            break;
-
-          case 'output':
-            if (termRef.current) termRef.current.write(msg.data);
-            break;
-
-          case 'scrollback':
-            if (termRef.current) termRef.current.write(msg.data);
-            break;
-
-          case 'exit':
-            setStatus('disconnected');
-            break;
-        }
-      } catch {
-        // ignore
-      }
-    },
-    [sessionId, onSessionCreated]
-  );
-
+  // Main init — runs once
   useEffect(() => {
     if (!containerRef.current) return;
 
     let disposed = false;
-    let term: any;
-    let fitAddon: any;
 
     async function init() {
       const { Terminal } = await import('@xterm/xterm');
@@ -66,7 +36,7 @@ export default function TerminalPanel({ sessionId, ws, isActive, onSessionCreate
 
       if (disposed) return;
 
-      term = new Terminal({
+      const term = new Terminal({
         cursorBlink: true,
         cursorStyle: 'block',
         fontSize: 14,
@@ -97,7 +67,7 @@ export default function TerminalPanel({ sessionId, ws, isActive, onSessionCreate
         },
       });
 
-      fitAddon = new FitAddon();
+      const fitAddon = new FitAddon();
       term.loadAddon(fitAddon);
       term.loadAddon(new WebLinksAddon());
 
@@ -107,10 +77,12 @@ export default function TerminalPanel({ sessionId, ws, isActive, onSessionCreate
       term.open(containerRef.current!);
       fitAddon.fit();
 
-      // Terminal input → WS
+      // Terminal input → WS (uses refs for latest values)
       term.onData((data: string) => {
-        if (ws && ws.readyState === WebSocket.OPEN && sessionId) {
-          ws.send(JSON.stringify({ type: 'input', sessionId, data }));
+        const sock = wsRef.current;
+        const sid = sessionIdRef.current;
+        if (sock && sock.readyState === WebSocket.OPEN && sid) {
+          sock.send(JSON.stringify({ type: 'input', sessionId: sid, data }));
         }
       });
 
@@ -118,30 +90,16 @@ export default function TerminalPanel({ sessionId, ws, isActive, onSessionCreate
       const observer = new ResizeObserver(() => {
         if (!disposed && fitAddon) {
           fitAddon.fit();
-          if (ws && ws.readyState === WebSocket.OPEN && sessionId && term) {
-            ws.send(
-              JSON.stringify({ type: 'resize', sessionId, cols: term.cols, rows: term.rows })
-            );
+          const sock = wsRef.current;
+          const sid = sessionIdRef.current;
+          if (sock && sock.readyState === WebSocket.OPEN && sid) {
+            sock.send(JSON.stringify({ type: 'resize', sessionId: sid, cols: term.cols, rows: term.rows }));
           }
         }
       });
       observer.observe(containerRef.current!);
 
-      // Create or attach to session
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        if (sessionId && !attachedRef.current) {
-          ws.send(JSON.stringify({ type: 'attach', sessionId }));
-          attachedRef.current = true;
-        } else if (!sessionId) {
-          const cols = term.cols;
-          const rows = term.rows;
-          ws.send(JSON.stringify({ type: 'create', cols, rows }));
-        }
-      }
-
-      return () => {
-        observer.disconnect();
-      };
+      return () => observer.disconnect();
     }
 
     init();
@@ -151,16 +109,64 @@ export default function TerminalPanel({ sessionId, ws, isActive, onSessionCreate
       termRef.current?.dispose();
       termRef.current = null;
       fitAddonRef.current = null;
-      attachedRef.current = false;
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Listen to WS messages
+  // WS message handler — uses refs so no stale closure
   useEffect(() => {
     if (!ws) return;
-    ws.addEventListener('message', handleWsMessage);
-    return () => ws.removeEventListener('message', handleWsMessage);
-  }, [ws, handleWsMessage]);
+
+    function handleMessage(event: MessageEvent) {
+      try {
+        const msg = JSON.parse(event.data);
+
+        // For 'created' — this is our session being born
+        if (msg.type === 'created' && !sessionIdRef.current) {
+          sessionIdRef.current = msg.sessionId;
+          if (onSessionCreatedRef.current) onSessionCreatedRef.current(msg.sessionId);
+          setStatus('connected');
+          return;
+        }
+
+        // Filter messages for other sessions
+        if (msg.sessionId && msg.sessionId !== sessionIdRef.current) return;
+
+        switch (msg.type) {
+          case 'attached':
+            setStatus('connected');
+            break;
+          case 'output':
+            if (termRef.current) termRef.current.write(msg.data);
+            break;
+          case 'scrollback':
+            if (termRef.current) termRef.current.write(msg.data);
+            break;
+          case 'exit':
+            setStatus('disconnected');
+            break;
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    ws.addEventListener('message', handleMessage);
+    return () => ws.removeEventListener('message', handleMessage);
+  }, [ws]);
+
+  // Send create/attach when WS is ready
+  useEffect(() => {
+    if (!ws || ws.readyState !== WebSocket.OPEN || !termRef.current) return;
+
+    if (sessionId) {
+      // Reconnect to existing session
+      ws.send(JSON.stringify({ type: 'attach', sessionId }));
+    } else {
+      // Create new session
+      const term = termRef.current;
+      ws.send(JSON.stringify({ type: 'create', cols: term.cols, rows: term.rows }));
+    }
+  }, [ws, sessionId]);
 
   // Focus terminal when tab becomes active
   useEffect(() => {
@@ -172,7 +178,6 @@ export default function TerminalPanel({ sessionId, ws, isActive, onSessionCreate
 
   return (
     <div className="h-full w-full relative">
-      {/* Status indicator */}
       <div className="absolute top-2 right-2 z-10 flex items-center gap-1.5">
         <div
           className={`w-2 h-2 rounded-full ${
@@ -185,8 +190,6 @@ export default function TerminalPanel({ sessionId, ws, isActive, onSessionCreate
         />
         <span className="text-xs text-gray-500 font-mono">{status}</span>
       </div>
-
-      {/* Terminal container */}
       <div ref={containerRef} className="h-full w-full" style={{ padding: '4px' }} />
     </div>
   );
