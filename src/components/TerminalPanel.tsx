@@ -77,6 +77,16 @@ export default function TerminalPanel({ sessionId, ws, isActive, onSessionCreate
       term.open(containerRef.current!);
       fitAddon.fit();
 
+      // Send create/attach NOW that terminal is ready
+      const sock = wsRef.current;
+      if (sock && sock.readyState === WebSocket.OPEN) {
+        if (sessionIdRef.current) {
+          sock.send(JSON.stringify({ type: 'attach', sessionId: sessionIdRef.current }));
+        } else {
+          sock.send(JSON.stringify({ type: 'create', cols: term.cols, rows: term.rows }));
+        }
+      }
+
       // Terminal input → WS (uses refs for latest values)
       term.onData((data: string) => {
         const sock = wsRef.current;
@@ -154,19 +164,13 @@ export default function TerminalPanel({ sessionId, ws, isActive, onSessionCreate
     return () => ws.removeEventListener('message', handleMessage);
   }, [ws]);
 
-  // Send create/attach when WS is ready
+  // If WS connects AFTER terminal is already initialized
   useEffect(() => {
-    if (!ws || ws.readyState !== WebSocket.OPEN || !termRef.current) return;
-
-    if (sessionId) {
-      // Reconnect to existing session
-      ws.send(JSON.stringify({ type: 'attach', sessionId }));
-    } else {
-      // Create new session
-      const term = termRef.current;
-      ws.send(JSON.stringify({ type: 'create', cols: term.cols, rows: term.rows }));
-    }
-  }, [ws, sessionId]);
+    if (!ws || ws.readyState !== WebSocket.OPEN || !termRef.current || sessionIdRef.current) return;
+    // Terminal exists but no session yet — create one
+    const term = termRef.current;
+    ws.send(JSON.stringify({ type: 'create', cols: term.cols, rows: term.rows }));
+  }, [ws]);
 
   // Focus terminal when tab becomes active
   useEffect(() => {
