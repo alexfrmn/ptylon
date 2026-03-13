@@ -6,13 +6,25 @@
 
 import { spawn } from 'node-pty';
 import { randomUUID } from 'crypto';
+import fs from 'fs';
+import path from 'path';
 
 const SCROLLBACK_LIMIT = 10000; // lines
 const IDLE_TIMEOUT_MS = 24 * 60 * 60 * 1000; // 24h
+const ALLOWED_CWD_ROOT = process.env.ALLOWED_CWD_ROOT || '/opt/lifecoach';
+
+function resolveSafeCwd(inputCwd = ALLOWED_CWD_ROOT) {
+  const root = fs.realpathSync.native(ALLOWED_CWD_ROOT);
+  const resolved = fs.realpathSync.native(path.resolve(inputCwd));
+  if (!resolved.startsWith(root)) {
+    return root;
+  }
+  return resolved;
+}
 
 class PtyManager {
   constructor() {
-    /** @type {Map<string, {pty: any, scrollback: string[], cwd: string, createdAt: number, lastActivity: number, cols: number, rows: number, name: string, color: string}>} */
+    /** @type {Map<string, {pty: any, scrollback: string[], cwd: string, createdAt: number, lastActivity: number, cols: number, rows: number, name: string, color: string, pid: number}>} */
     this.sessions = new Map();
     this._cleanupInterval = setInterval(() => this._cleanupIdle(), 60 * 60 * 1000);
   }
@@ -20,13 +32,15 @@ class PtyManager {
   /**
    * Create a new PTY session
    */
-  create({ cols = 120, rows = 30, cwd = '/opt/lifecoach', name = 'Terminal', color = '#40E0D0' } = {}) {
+  create({ cols = 120, rows = 30, cwd = ALLOWED_CWD_ROOT, name = 'Terminal', color = '#40E0D0' } = {}) {
     const sessionId = randomUUID();
+    const safeCwd = resolveSafeCwd(cwd);
+
     const pty = spawn('/bin/bash', [], {
       name: 'xterm-256color',
       cols,
       rows,
-      cwd,
+      cwd: safeCwd,
       env: {
         ...process.env,
         TERM: 'xterm-256color',
@@ -40,7 +54,7 @@ class PtyManager {
     const session = {
       pty,
       scrollback: [],
-      cwd,
+      cwd: safeCwd,
       createdAt: Date.now(),
       lastActivity: Date.now(),
       cols,
@@ -69,7 +83,7 @@ class PtyManager {
     });
 
     this.sessions.set(sessionId, session);
-    console.log(`[PTY] Created session ${sessionId} (pid=${pty.pid}, cwd=${cwd})`);
+    console.log(`[PTY] Created session ${sessionId} (pid=${pty.pid}, cwd=${safeCwd})`);
     return sessionId;
   }
 
@@ -86,6 +100,7 @@ class PtyManager {
   write(sessionId, data) {
     const session = this.sessions.get(sessionId);
     if (!session) return false;
+    if (typeof data !== 'string') return false;
     session.pty.write(data);
     session.lastActivity = Date.now();
     return true;
@@ -97,6 +112,7 @@ class PtyManager {
   resize(sessionId, cols, rows) {
     const session = this.sessions.get(sessionId);
     if (!session) return false;
+    if (!Number.isFinite(cols) || !Number.isFinite(rows)) return false;
     session.pty.resize(cols, rows);
     session.cols = cols;
     session.rows = rows;
@@ -188,7 +204,7 @@ class PtyManager {
    */
   destroy() {
     clearInterval(this._cleanupInterval);
-    for (const [id, session] of this.sessions) {
+    for (const [, session] of this.sessions) {
       session.pty.kill();
     }
     this.sessions.clear();

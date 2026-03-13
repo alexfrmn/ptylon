@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyPassword, signToken, verifyToken } from '@/lib/auth';
 
+function shouldUseSecureCookie(req: NextRequest): boolean {
+  if (process.env.ALLOW_INSECURE_COOKIE === 'true') return false;
+  if (process.env.NODE_ENV === 'production') return true;
+  const proto = req.headers.get('x-forwarded-proto');
+  return proto === 'https';
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { password } = await req.json();
@@ -20,7 +27,7 @@ export async function POST(req: NextRequest) {
     // Set httpOnly cookie
     response.cookies.set('wc-token', token, {
       httpOnly: true,
-      secure: false, // CF Flexible SSL — origin is HTTP
+      secure: shouldUseSecureCookie(req),
       sameSite: 'lax',
       maxAge: 7 * 24 * 60 * 60, // 7 days
       path: '/',

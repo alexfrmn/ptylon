@@ -7,13 +7,18 @@ import { WebSocketServer } from 'ws';
 import jwt from 'jsonwebtoken';
 import { ptyManager } from './pty-manager.mjs';
 
-const WS_PORT = parseInt(process.env.WS_PORT || '8791');
-const JWT_SECRET = process.env.JWT_SECRET || 'web-console-jwt-secret-2026';
+const WS_PORT = parseInt(process.env.WS_PORT || '8791', 10);
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET is required for WS server');
+}
 
 // Track which WS client is attached to which PTY session
 // Multiple clients can attach to same session (multi-device)
 const clientSessions = new Map(); // ws -> Set<sessionId>
 const sessionClients = new Map(); // sessionId -> Set<ws>
+const hookedSessions = new Set(); // sessionIds with output hooks installed
 
 function broadcastToSession(sessionId, data, excludeWs = null) {
   const clients = sessionClients.get(sessionId);
@@ -24,6 +29,22 @@ function broadcastToSession(sessionId, data, excludeWs = null) {
       ws.send(msg);
     }
   }
+}
+
+function attachHooksIfNeeded(sessionId, session) {
+  if (!session || hookedSessions.has(sessionId)) return;
+
+  session.pty.onData((output) => {
+    broadcastToSession(sessionId, { type: 'output', sessionId, data: output });
+  });
+
+  session.pty.onExit(({ exitCode }) => {
+    broadcastToSession(sessionId, { type: 'exit', sessionId, code: exitCode });
+    sessionClients.delete(sessionId);
+    hookedSessions.delete(sessionId);
+  });
+
+  hookedSessions.add(sessionId);
 }
 
 function attachClient(ws, sessionId) {
@@ -64,7 +85,7 @@ export function startWsServer() {
 
     try {
       jwt.verify(token, JWT_SECRET);
-    } catch (err) {
+    } catch {
       ws.send(JSON.stringify({ type: 'error', data: 'Invalid auth token' }));
       ws.close(4001, 'Unauthorized');
       return;
@@ -91,24 +112,17 @@ export function startWsServer() {
 
           // Attach client
           attachClient(ws, newId);
+          attachHooksIfNeeded(newId, session);
 
-          // Pipe PTY output to all attached clients
-          session.pty.onData((output) => {
-            broadcastToSession(newId, { type: 'output', sessionId: newId, data: output });
-          });
-
-          session.pty.onExit(({ exitCode }) => {
-            broadcastToSession(newId, { type: 'exit', sessionId: newId, code: exitCode });
-            sessionClients.delete(newId);
-          });
-
-          ws.send(JSON.stringify({
-            type: 'created',
-            sessionId: newId,
-            name: session.name,
-            color: session.color,
-            pid: session.pid,
-          }));
+          ws.send(
+            JSON.stringify({
+              type: 'created',
+              sessionId: newId,
+              name: session.name,
+              color: session.color,
+              pid: session.pid,
+            }),
+          );
           break;
         }
 
@@ -121,17 +135,7 @@ export function startWsServer() {
           }
 
           attachClient(ws, sessionId);
-
-          // If no other clients — re-attach PTY output listener
-          if (sessionClients.get(sessionId).size === 1) {
-            session.pty.onData((output) => {
-              broadcastToSession(sessionId, { type: 'output', sessionId, data: output });
-            });
-            session.pty.onExit(({ exitCode }) => {
-              broadcastToSession(sessionId, { type: 'exit', sessionId, code: exitCode });
-              sessionClients.delete(sessionId);
-            });
-          }
+          attachHooksIfNeeded(sessionId, session);
 
           // Send scrollback
           const scrollback = ptyManager.getScrollback(sessionId);
@@ -139,14 +143,16 @@ export function startWsServer() {
             ws.send(JSON.stringify({ type: 'scrollback', sessionId, data: scrollback }));
           }
 
-          ws.send(JSON.stringify({
-            type: 'attached',
-            sessionId,
-            name: session.name,
-            color: session.color,
-            cols: session.cols,
-            rows: session.rows,
-          }));
+          ws.send(
+            JSON.stringify({
+              type: 'attached',
+              sessionId,
+              name: session.name,
+              color: session.color,
+              cols: session.cols,
+              rows: session.rows,
+            }),
+          );
           break;
         }
 
@@ -166,6 +172,7 @@ export function startWsServer() {
         // Kill session
         case 'kill': {
           ptyManager.kill(sessionId);
+          hookedSessions.delete(sessionId);
           broadcastToSession(sessionId, { type: 'killed', sessionId });
           break;
         }
@@ -206,11 +213,13 @@ export function startWsServer() {
     });
 
     // Send welcome + session list
-    ws.send(JSON.stringify({
-      type: 'welcome',
-      sessions: ptyManager.list(),
-      stats: ptyManager.stats(),
-    }));
+    ws.send(
+      JSON.stringify({
+        type: 'welcome',
+        sessions: ptyManager.list(),
+        stats: ptyManager.stats(),
+      }),
+    );
   });
 
   // Graceful shutdown

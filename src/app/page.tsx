@@ -13,6 +13,7 @@ export default function Home() {
   const { authenticated, setAuth, tabs, activeTabId, addTab, updateTab, ws, setWs, setWsConnected } =
     useWorkspaceStore();
   const [checking, setChecking] = useState(true);
+  const [reconnectNonce, setReconnectNonce] = useState(0);
 
   // Check auth on mount
   useEffect(() => {
@@ -51,9 +52,7 @@ export default function Home() {
           // If server has existing sessions — restore them
           if (msg.sessions && msg.sessions.length > 0) {
             for (const s of msg.sessions) {
-              const existing = useWorkspaceStore.getState().tabs.find(
-                (t) => t.sessionId === s.id
-              );
+              const existing = useWorkspaceStore.getState().tabs.find((t) => t.sessionId === s.id);
               if (!existing) {
                 addTab({
                   id: crypto.randomUUID(),
@@ -83,10 +82,12 @@ export default function Home() {
     socket.onclose = () => {
       console.log('[WS] Disconnected');
       setWsConnected(false);
+      setWs(null);
+
       // Reconnect after 3s
-      setTimeout(() => {
+      window.setTimeout(() => {
         if (useWorkspaceStore.getState().authenticated) {
-          setAuth(true, wsToken);
+          setReconnectNonce((v) => v + 1);
         }
       }, 3000);
     };
@@ -98,13 +99,13 @@ export default function Home() {
     return () => {
       socket.close();
     };
-  }, [authenticated, setWs, setWsConnected, addTab, setAuth]);
+  }, [authenticated, reconnectNonce, setWs, setWsConnected, addTab]);
 
   const handleSessionCreated = useCallback(
     (tabId: string, sessionId: string) => {
       updateTab(tabId, { sessionId });
     },
-    [updateTab]
+    [updateTab],
   );
 
   if (checking) {
@@ -127,10 +128,7 @@ export default function Home() {
       {/* Terminal panels */}
       <div className="flex-1 relative">
         {tabs.map((tab) => (
-          <div
-            key={tab.id}
-            className={`absolute inset-0 ${activeTabId === tab.id ? 'z-10' : 'z-0 invisible'}`}
-          >
+          <div key={tab.id} className={`absolute inset-0 ${activeTabId === tab.id ? 'z-10' : 'z-0 invisible'}`}>
             {tab.type === 'terminal' && (
               <TerminalPanel
                 sessionId={tab.sessionId || null}
@@ -163,7 +161,9 @@ export default function Home() {
           />
           {useWorkspaceStore.getState().wsConnected ? 'Connected' : 'Disconnected'}
         </span>
-        <span>{tabs.length} tab{tabs.length !== 1 ? 's' : ''}</span>
+        <span>
+          {tabs.length} tab{tabs.length !== 1 ? 's' : ''}
+        </span>
         <span className="ml-auto">console.zakaz.su</span>
       </div>
     </div>

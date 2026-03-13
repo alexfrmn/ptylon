@@ -1,10 +1,17 @@
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'web-console-jwt-secret-2026';
 const JWT_EXPIRY = '7d';
 
 // Plain password — single-user system behind nginx basic_auth
 const AUTH_PASSWORD = process.env.AUTH_PASSWORD || '';
+
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('JWT_SECRET is required');
+  }
+  return secret;
+}
 
 export async function verifyPassword(password: string): Promise<boolean> {
   if (!AUTH_PASSWORD) return false;
@@ -18,12 +25,12 @@ export async function verifyPassword(password: string): Promise<boolean> {
 }
 
 export function signToken(): string {
-  return jwt.sign({ user: 'admin', iat: Date.now() }, JWT_SECRET, { expiresIn: JWT_EXPIRY });
+  return jwt.sign({ user: 'admin' }, getJwtSecret(), { expiresIn: JWT_EXPIRY });
 }
 
 export function verifyToken(token: string): boolean {
   try {
-    jwt.verify(token, JWT_SECRET);
+    jwt.verify(token, getJwtSecret());
     return true;
   } catch {
     return false;

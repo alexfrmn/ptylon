@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import type { FitAddon } from '@xterm/addon-fit';
+import type { Terminal } from '@xterm/xterm';
 
 interface TerminalPanelProps {
   sessionId: string | null;
@@ -11,8 +13,11 @@ interface TerminalPanelProps {
 
 export default function TerminalPanel({ sessionId, ws, isActive, onSessionCreated }: TerminalPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const termRef = useRef<any>(null);
-  const fitAddonRef = useRef<any>(null);
+  const termRef = useRef<Terminal | null>(null);
+  const fitAddonRef = useRef<FitAddon | null>(null);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const resizeTimerRef = useRef<number | null>(null);
+
   const sessionIdRef = useRef<string | null>(sessionId);
   const wsRef = useRef<WebSocket | null>(ws);
   const onSessionCreatedRef = useRef(onSessionCreated);
@@ -30,9 +35,11 @@ export default function TerminalPanel({ sessionId, ws, isActive, onSessionCreate
     let disposed = false;
 
     async function init() {
-      const { Terminal } = await import('@xterm/xterm');
-      const { FitAddon } = await import('@xterm/addon-fit');
-      const { WebLinksAddon } = await import('@xterm/addon-web-links');
+      const [{ Terminal }, { FitAddon }, { WebLinksAddon }] = await Promise.all([
+        import('@xterm/xterm'),
+        import('@xterm/addon-fit'),
+        import('@xterm/addon-web-links'),
+      ]);
 
       if (disposed) return;
 
@@ -89,38 +96,55 @@ export default function TerminalPanel({ sessionId, ws, isActive, onSessionCreate
 
       // Terminal input → WS (uses refs for latest values)
       term.onData((data: string) => {
-        const sock = wsRef.current;
+        const currentWs = wsRef.current;
         const sid = sessionIdRef.current;
-        if (sock && sock.readyState === WebSocket.OPEN && sid) {
-          sock.send(JSON.stringify({ type: 'input', sessionId: sid, data }));
+        if (currentWs && currentWs.readyState === WebSocket.OPEN && sid) {
+          currentWs.send(JSON.stringify({ type: 'input', sessionId: sid, data }));
         }
       });
 
-      // Resize observer
+      // Resize observer (debounced)
       const observer = new ResizeObserver(() => {
-        if (!disposed && fitAddon) {
-          fitAddon.fit();
-          const sock = wsRef.current;
-          const sid = sessionIdRef.current;
-          if (sock && sock.readyState === WebSocket.OPEN && sid) {
-            sock.send(JSON.stringify({ type: 'resize', sessionId: sid, cols: term.cols, rows: term.rows }));
-          }
-        }
-      });
-      observer.observe(containerRef.current!);
+        if (disposed || !fitAddon || !termRef.current) return;
 
-      return () => observer.disconnect();
+        if (resizeTimerRef.current !== null) {
+          window.clearTimeout(resizeTimerRef.current);
+        }
+
+        resizeTimerRef.current = window.setTimeout(() => {
+          fitAddon.fit();
+          const currentWs = wsRef.current;
+          const sid = sessionIdRef.current;
+          if (currentWs && currentWs.readyState === WebSocket.OPEN && sid && termRef.current) {
+            currentWs.send(
+              JSON.stringify({ type: 'resize', sessionId: sid, cols: termRef.current.cols, rows: termRef.current.rows }),
+            );
+          }
+        }, 50);
+      });
+
+      resizeObserverRef.current = observer;
+      observer.observe(containerRef.current!);
     }
 
-    init();
+    void init();
 
     return () => {
       disposed = true;
+
+      if (resizeTimerRef.current !== null) {
+        window.clearTimeout(resizeTimerRef.current);
+        resizeTimerRef.current = null;
+      }
+
+      resizeObserverRef.current?.disconnect();
+      resizeObserverRef.current = null;
+
       termRef.current?.dispose();
       termRef.current = null;
       fitAddonRef.current = null;
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // WS message handler — uses refs so no stale closure
   useEffect(() => {
@@ -146,13 +170,15 @@ export default function TerminalPanel({ sessionId, ws, isActive, onSessionCreate
             setStatus('connected');
             break;
           case 'output':
-            if (termRef.current) termRef.current.write(msg.data);
+            termRef.current?.write(msg.data);
             break;
           case 'scrollback':
-            if (termRef.current) termRef.current.write(msg.data);
+            termRef.current?.write(msg.data);
             break;
           case 'exit':
             setStatus('disconnected');
+            break;
+          default:
             break;
         }
       } catch {
@@ -168,8 +194,7 @@ export default function TerminalPanel({ sessionId, ws, isActive, onSessionCreate
   useEffect(() => {
     if (!ws || ws.readyState !== WebSocket.OPEN || !termRef.current || sessionIdRef.current) return;
     // Terminal exists but no session yet — create one
-    const term = termRef.current;
-    ws.send(JSON.stringify({ type: 'create', cols: term.cols, rows: term.rows }));
+    ws.send(JSON.stringify({ type: 'create', cols: termRef.current.cols, rows: termRef.current.rows }));
   }, [ws]);
 
   // Focus terminal when tab becomes active
@@ -188,8 +213,8 @@ export default function TerminalPanel({ sessionId, ws, isActive, onSessionCreate
             status === 'connected'
               ? 'bg-green-400 animate-pulse'
               : status === 'connecting'
-              ? 'bg-amber-400 animate-pulse'
-              : 'bg-red-400'
+                ? 'bg-amber-400 animate-pulse'
+                : 'bg-red-400'
           }`}
         />
         <span className="text-xs text-gray-500 font-mono">{status}</span>
