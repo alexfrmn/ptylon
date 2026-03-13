@@ -1,15 +1,20 @@
-import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'web-console-jwt-secret-2026';
 const JWT_EXPIRY = '7d';
 
-// Password hash stored in .env
-const PASSWORD_HASH = process.env.AUTH_PASSWORD_HASH || '';
+// Plain password — single-user system behind nginx basic_auth
+const AUTH_PASSWORD = process.env.AUTH_PASSWORD || '';
 
 export async function verifyPassword(password: string): Promise<boolean> {
-  if (!PASSWORD_HASH) return false;
-  return bcrypt.compare(password, PASSWORD_HASH);
+  if (!AUTH_PASSWORD) return false;
+  // Constant-time comparison to prevent timing attacks
+  if (password.length !== AUTH_PASSWORD.length) return false;
+  let result = 0;
+  for (let i = 0; i < password.length; i++) {
+    result |= password.charCodeAt(i) ^ AUTH_PASSWORD.charCodeAt(i);
+  }
+  return result === 0;
 }
 
 export function signToken(): string {
@@ -23,8 +28,4 @@ export function verifyToken(token: string): boolean {
   } catch {
     return false;
   }
-}
-
-export async function generatePasswordHash(password: string): Promise<string> {
-  return bcrypt.hash(password, 10);
 }
