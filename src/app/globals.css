@@ -1,0 +1,47 @@
+@import "tailwindcss";
+@import "@xterm/xterm/css/xterm.css";
+
+:root {
+  --background: #0a0e14;
+  --foreground: #e0e0e0;
+  --accent: #40E0D0;
+  --surface: #0d1117;
+  --border: #1a1e24;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-mono: var(--font-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-mono), 'JetBrains Mono', 'Fira Code', monospace;
+  overflow: hidden;
+}
+
+/* Hide scrollbar in tab bar */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* xterm.js overrides */
+.xterm {
+  padding: 4px;
+}
+.xterm-viewport::-webkit-scrollbar {
+  width: 6px;
+}
+.xterm-viewport::-webkit-scrollbar-thumb {
+  background: #2a2e34;
+  border-radius: 3px;
+}
+.xterm-viewport::-webkit-scrollbar-track {
+  background: transparent;
+}
