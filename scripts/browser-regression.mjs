@@ -494,8 +494,13 @@ async function main() {
     await evalJs(cdp, page, `document.querySelector('[data-theme-palette-option="circadian"]').click()`);
     await waitFor(cdp, page, `document.documentElement.getAttribute('data-theme-palette') === 'circadian' && localStorage.getItem('circadian-theme-palette') === 'circadian'`, 'theme palette reset');
     await waitFor(cdp, page, `fetch('/api/workspace').then((r) => r.json()).then((data) => data.state?.themeSettings?.paletteId === 'circadian').catch(() => false)`, 'theme palette reset synced to server state');
+    await evalJs(cdp, page, `document.querySelector('[data-theme-palette-option="paper-trail"]').click()`);
+    await waitFor(cdp, page, `document.documentElement.getAttribute('data-theme-palette') === 'paper-trail'`, 'theme palette reapplied before auto');
     await evalJs(cdp, page, `Array.from(document.querySelectorAll('button')).find((candidate) => candidate.innerText.trim() === 'close')?.click()`);
-    report.checks.push('theme gallery applies, syncs, and resets curated palette');
+    await evalJs(cdp, page, `Array.from(document.querySelectorAll('button')).find((candidate) => candidate.innerText.trim() === 'auto')?.click()`);
+    await waitFor(cdp, page, `document.documentElement.getAttribute('data-theme-palette') === 'circadian' && document.documentElement.getAttribute('data-circadian-mode') === 'auto' && localStorage.getItem('circadian-theme-palette') === 'circadian' && localStorage.getItem('circadian-theme-mode') === 'auto'`, 'auto theme resets fixed palette');
+    await waitFor(cdp, page, `fetch('/api/workspace').then((r) => r.json()).then((data) => data.state?.themeSettings?.paletteId === 'circadian' && data.state?.themeSettings?.mode === 'auto').catch(() => false)`, 'auto theme synced to server state');
+    report.checks.push('theme gallery applies, syncs, resets curated palette, and auto restores circadian');
 
     const adminNoticeTitle = `WC_ADMIN_${Date.now()}`;
     const adminNotify = await evalJs(cdp, page, `
@@ -525,6 +530,7 @@ async function main() {
       const state = JSON.parse(localStorage.getItem('web-console-workspace') || 'null');
       return (state?.tabs || []).some((tab) => tab.type === 'browser' && tab.browserSessionId);
     })()`, 'browser tab bound to server session');
+    await waitFor(cdp, page, `fetch('/api/workspace').then((r) => r.json()).then((data) => data.state?.themeSettings?.paletteId === 'circadian').catch(() => false)`, 'workspace autosave preserved theme settings');
     report.checks.push('server browser panel created and rendered');
     const browserTab = await evalJs(cdp, page, `(() => {
       const state = JSON.parse(localStorage.getItem('web-console-workspace') || 'null');

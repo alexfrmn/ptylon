@@ -15,6 +15,8 @@
 - Terminal click-to-cursor now falls back to viewport-derived cell dimensions when xterm private render dimensions are unavailable.
 - Public examples no longer hardcode a personal deployment path.
 - Browser regression now verifies that Theme Gallery changes persist to server workspace state.
+- Workspace autosave no longer drops saved theme settings from server workspace state.
+- The footer `auto` theme button now resets fixed/custom palettes back to the circadian auto palette.
 
 ### Verified
 

@@ -24,6 +24,7 @@ export interface CircadianTheme {
   setMode: (mode: CircadianMode) => void;
   setOverride: (phase: CircadianPhase) => void;
   clearOverride: () => void;
+  resetToAuto: () => void;
   setPalette: (paletteId: string) => void;
   previewPalette: (paletteId: string | null) => void;
   clearPreview: () => void;
@@ -225,6 +226,15 @@ export function useCircadianTheme(syncEnabled = false): CircadianTheme {
     localStorage.setItem(PALETTE_STORAGE_KEY, normalized);
   }, []);
 
+  const resetToAuto = useCallback(() => {
+    setPreviewPaletteId(null);
+    setModeState('auto');
+    setPaletteIdState(CIRCADIAN_PALETTE_ID);
+    localStorage.setItem(MODE_STORAGE_KEY, 'auto');
+    localStorage.setItem(PALETTE_STORAGE_KEY, CIRCADIAN_PALETTE_ID);
+    localStorage.removeItem(LEGACY_OVERRIDE_KEY);
+  }, []);
+
   const importPalette = useCallback((value: unknown) => {
     const palette = normalizeThemePalette(value);
     if (!palette) return null;
@@ -264,7 +274,8 @@ export function useCircadianTheme(syncEnabled = false): CircadianTheme {
     activePalette,
     setMode,
     setOverride: useCallback((phase: CircadianPhase) => setMode(modeFromPhase(phase)), [setMode]),
-    clearOverride: useCallback(() => setMode('auto'), [setMode]),
+    clearOverride: resetToAuto,
+    resetToAuto,
     setPalette,
     previewPalette: setPreviewPaletteId,
     clearPreview: useCallback(() => setPreviewPaletteId(null), []),

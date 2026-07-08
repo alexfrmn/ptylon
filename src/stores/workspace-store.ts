@@ -103,6 +103,12 @@ function loadPersistedState(): Partial<PersistedState> {
 function savePersistedState(state: PersistedState) {
   if (typeof window === 'undefined') return;
   const payload = { ...state, _version: STORAGE_VERSION, _savedAt: Date.now() };
+  if (!payload.themeSettings) {
+    try {
+      const current = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') as Partial<PersistedState>;
+      if (current.themeSettings) payload.themeSettings = current.themeSettings;
+    } catch { /* ignore */ }
+  }
   // Save to localStorage (instant cache)
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));

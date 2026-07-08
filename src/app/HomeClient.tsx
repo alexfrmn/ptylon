@@ -850,7 +850,13 @@ export default function Home() {
         >
           themes
         </button>
-        <button onClick={() => circadian.clearOverride()} style={{ color: circadian.mode === 'auto' ? 'var(--accent)' : undefined }} title="Auto theme">auto</button>
+        <button
+          onClick={() => circadian.resetToAuto()}
+          style={{ color: circadian.mode === 'auto' && circadian.paletteId === 'circadian' ? 'var(--accent)' : undefined }}
+          title="Auto circadian theme"
+        >
+          auto
+        </button>
         <span className="border-l pl-3 ml-1" style={{ borderColor: 'var(--border)' }} />
         <VoiceInput onTranscript={handleVoiceTranscript} />
         <span className="ml-auto hidden sm:inline">{APP_LABEL}</span>
