@@ -12,7 +12,7 @@ ExecStart=/usr/bin/node .next/standalone/server.js
 Restart=on-failure
 RestartSec=5
 Environment=PORT=8790
-Environment=HOSTNAME=127.0.0.1
+Environment=HOSTNAME=0.0.0.0
 NoNewPrivileges=true
 PrivateTmp=true
 KillSignal=SIGINT

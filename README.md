@@ -95,8 +95,9 @@ sudo ./scripts/install-systemd.sh
 
 It creates an unprivileged account, workspace, generated secrets, production
 build, systemd services, and a needrestart guard. It prints the generated app
-password once. The service listens locally; configure HTTPS and an external
-access gate in nginx/Caddy before exposing it beyond the server.
+password once. Configure HTTPS and an external access gate in nginx/Caddy
+before exposing it beyond the server. If nginx/NPM runs on another host, allow
+only that proxy host to reach ports `8790` and `8791`; `/ws` must reach `8791`.
 
 Create the service account and a dedicated workspace before installing units:
 

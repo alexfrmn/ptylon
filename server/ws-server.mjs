@@ -7,7 +7,8 @@ import { WebSocket, WebSocketServer } from 'ws';
 import jwt from 'jsonwebtoken';
 
 const WS_PORT = parseInt(process.env.WS_PORT || '8791', 10);
-const WS_HOST = process.env.WS_HOST || '127.0.0.1';
+// NPM may run on another host and proxy /ws directly to this gateway.
+const WS_HOST = process.env.WS_HOST || '0.0.0.0';
 const PTY_DAEMON_URL = process.env.PTY_DAEMON_URL || `ws://127.0.0.1:${process.env.PTY_DAEMON_PORT || '8792'}`;
 
 if (!process.env.JWT_SECRET) {
