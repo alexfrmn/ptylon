@@ -7,6 +7,7 @@ import { WebSocket, WebSocketServer } from 'ws';
 import jwt from 'jsonwebtoken';
 
 const WS_PORT = parseInt(process.env.WS_PORT || '8791', 10);
+const WS_HOST = process.env.WS_HOST || '127.0.0.1';
 const PTY_DAEMON_URL = process.env.PTY_DAEMON_URL || `ws://127.0.0.1:${process.env.PTY_DAEMON_PORT || '8792'}`;
 
 if (!process.env.JWT_SECRET) {
@@ -263,7 +264,7 @@ function scheduleDaemonReconnect() {
 
 export function startWsServer() {
   connectDaemon();
-  const wss = new WebSocketServer({ port: WS_PORT });
+  const wss = new WebSocketServer({ port: WS_PORT, host: WS_HOST });
 
   const heartbeat = setInterval(() => {
     for (const ws of wss.clients) {
@@ -367,7 +368,7 @@ export function startWsServer() {
   process.on('SIGTERM', shutdown);
   process.on('SIGINT', shutdown);
 
-  console.log(`[WS] WebSocket gateway listening on port ${WS_PORT}`);
+  console.log(`[WS] WebSocket gateway listening on ${WS_HOST}:${WS_PORT}`);
   return wss;
 }
 
