@@ -73,6 +73,9 @@ jobs:
         run: |
           set -euo pipefail
           cp .env.example .env
+          export AUTH_PASSWORD=ci-docker-password
+          export JWT_SECRET=ci-docker-jwt-secret
+          export WEB_CONSOLE_ADMIN_TOKEN=ci-docker-admin-token
           trap 'docker compose down -v --remove-orphans' EXIT
           docker compose up --build -d
           for _ in $(seq 1 60); do
