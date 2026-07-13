@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/images/ptylon-logo.png" alt="Ptylon logo" width="140" />
+</p>
+
 # Ptylon
 
 > A self-hosted, browser-native terminal workspace — Termius in a browser tab.
@@ -6,7 +10,7 @@
 [![Node.js 22+](https://img.shields.io/badge/node-22%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-![Ptylon workspace with persistent terminal panes](docs/images/ptylon-workspace.png)
+![Ptylon server-hall terminal workspace](docs/images/ptylon-hero.png)
 
 **Ptylon** brings persistent terminals, browser tools, files, editing, and
 workspaces into one browser tab. It is designed for a server you control—not a
