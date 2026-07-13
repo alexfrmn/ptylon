@@ -12,16 +12,16 @@
 
 ![Ptylon server-hall terminal workspace](docs/images/ptylon-hero.webp)
 
-**Ptylon** puts persistent terminals, a real browser, files, and an editor in a single browser tab on a server you own. It is built for running coding agents — **Claude Code, Codex, and anything else that lives in a shell** — where their sessions survive restarts, they can drive a real browser, and you can check on them from your phone.
+**Ptylon** puts persistent terminals, a real browser, files, and an editor in a single browser tab on a server you own. It is built for running coding agents — **Claude Code, Codex, and anything else that lives in a shell** — where their sessions survive restarts, they can drive a real browser, and you can check on them from any browser.
 
 | [Quick start](#quick-start) | [Docker](#docker-compose) | [Architecture](#architecture) | [Production](#production-with-systemd) | [Contributing](CONTRIBUTING.md) |
 | --- | --- | --- | --- | --- |
 
 ## The Problem
 
-Running a coding agent on a remote box is clunky. You SSH in, start Claude Code in tmux, and hope the session is still alive when you come back. The agent can run commands but can't *see* a browser to test what it built. Your files are on the server, your editor is somewhere else, and none of it opens on a phone. Close the laptop and the work is stranded.
+Running a coding agent on a remote box is clunky. You SSH in, start Claude Code in tmux, and hope the session is still alive when you come back. The agent can run commands but can't *see* a browser to test what it built. Your files are on the server, your editor is somewhere else, and none of it is reachable without SSH-ing back in from the right machine.
 
-Ptylon removes that friction: the agent runs in a persistent server-side session, gets a real browser it can click through, and the whole workspace — terminals, files, editor, browser — is one authenticated URL you can open from anything.
+Ptylon removes that friction: the agent runs in a persistent server-side session, gets a real browser it can click through, and the whole workspace — terminals, files, editor, browser — is one authenticated URL you can open from any browser.
 
 ## Why Ptylon
 
@@ -39,11 +39,11 @@ Ptylon removes that friction: the agent runs in a persistent server-side session
 - **A browser the agent can see.** Server-side Chrome renders as a live panel and is scriptable over CDP through the `webc` CLI and a loopback admin API — the agent can open a page, click, type, and screenshot the same session you see.
 - **"It needs you" notifications.** A running command raises an unread badge via OSC escapes, so you know when the agent is waiting on input without watching it.
 - **Everything in one tab.** Split panes, named workspaces, a file manager, and a Monaco editor sit next to the terminal.
-- **Reachable from anything.** The workspace is one authenticated URL — open it from a laptop or a phone and pick up where the agent left off.
+- **Reachable from any desktop browser.** The workspace is one authenticated URL — open it from any desktop browser with no per-machine setup and pick up where the agent left off.
 
 ### A typical session
 
-Open Ptylon, start Claude Code in a pane, and ask it to build a feature. It edits files, runs the dev server, and opens a browser panel to check the result — you watch it click through the page. You split off a second terminal for logs and close the laptop. On your phone later you reopen the same URL: the agent is still running, the browser panel is still there, and you approve the next step.
+Open Ptylon, start Claude Code in a pane, and ask it to build a feature. It edits files, runs the dev server, and opens a browser panel to check the result — you watch it click through the page. You split off a second terminal for logs and close the laptop. From another machine later you reopen the same URL: the agent is still running, the browser panel is still there, and you approve the next step.
 
 ## Screenshots
 
@@ -298,6 +298,8 @@ The gallery includes curated palettes, live preview on hover/focus, apply-on-cli
 `Circadian Auto` leaves CSS variables under the existing time-aware phase system. Fixed palettes apply CSS variables directly to `:root`, then emit the same `circadian-theme-change` event used by xterm.js and Monaco. This keeps terminal and editor theme updates on the existing integration path.
 
 ## Mobile Workspace Controls
+
+Mobile support is basic: touch controls for workspace actions work, but the full workspace is tuned for a desktop browser.
 
 Workspace rows support both desktop right-click and touch-first actions. On mobile, open the sidebar from the status bar and use the `...` button on a workspace row to access rename, duplicate, and delete. This avoids relying on a context menu gesture that phones do not expose reliably.
 
