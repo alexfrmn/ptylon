@@ -1,8 +1,5 @@
 allowBuilds:
   better-sqlite3: true
   node-pty: true
-  sharp: true
-  unrs-resolver: true
-ignoredBuiltDependencies:
-  - sharp
-  - unrs-resolver
+  sharp: false
+  unrs-resolver: false
