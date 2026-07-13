@@ -174,7 +174,7 @@ function terminalSessionIds(state) {
 
 async function killSessions(wsToken, sessionIds) {
   if (!wsToken || sessionIds.length === 0) return;
-  const ws = new WebSocket(`${WS_URL}?token=${encodeURIComponent(wsToken)}`);
+  const ws = new WebSocket(WS_URL, { headers: { Cookie: `wc-token=${encodeURIComponent(wsToken)}` } });
   await new Promise((resolve, reject) => {
     ws.addEventListener('open', resolve, { once: true });
     ws.addEventListener('error', reject, { once: true });
@@ -187,7 +187,7 @@ async function killSessions(wsToken, sessionIds) {
 }
 
 async function sendSessionInput(wsToken, sessionId, data) {
-  const ws = new WebSocket(`${WS_URL}?token=${encodeURIComponent(wsToken)}`);
+  const ws = new WebSocket(WS_URL, { headers: { Cookie: `wc-token=${encodeURIComponent(wsToken)}` } });
   await new Promise((resolve, reject) => {
     ws.addEventListener('open', resolve, { once: true });
     ws.addEventListener('error', reject, { once: true });
@@ -198,7 +198,7 @@ async function sendSessionInput(wsToken, sessionId, data) {
 }
 
 async function sendSessionInputAndWaitForOutput(wsToken, sessionId, data, marker, timeoutMs = 10000) {
-  const ws = new WebSocket(`${WS_URL}?token=${encodeURIComponent(wsToken)}`);
+  const ws = new WebSocket(WS_URL, { headers: { Cookie: `wc-token=${encodeURIComponent(wsToken)}` } });
   await new Promise((resolve, reject) => {
     ws.addEventListener('open', resolve, { once: true });
     ws.addEventListener('error', reject, { once: true });
@@ -301,14 +301,9 @@ async function main() {
     assert(activeSessionId, 'no terminal sessionId found');
 
     const focusPoint = await evalJs(cdp, page, `(() => {
-      const terms = Array.from(document.querySelectorAll('.xterm'))
-        .map((candidate) => ({ candidate, textarea: candidate.querySelector('textarea') }))
-        .filter(({ candidate, textarea }) => {
-          const rect = candidate.getBoundingClientRect();
-          return textarea && rect.width > 0 && rect.height > 0 && getComputedStyle(candidate).visibility !== 'hidden';
-        })
-        .sort((a, b) => b.textarea.getBoundingClientRect().top - a.textarea.getBoundingClientRect().top);
-      const term = terms.at(-1)?.candidate;
+      const meta = document.querySelector('[data-session-meta="${activeSessionId}"]');
+      const pane = meta?.parentElement?.parentElement;
+      const term = pane?.querySelector('.xterm');
       const screen = term?.querySelector('.xterm-screen') || term;
       const textarea = term?.querySelector('textarea');
       if (!screen || !textarea) return null;
@@ -326,12 +321,9 @@ async function main() {
 
     const sentInputCountBeforeCursorClick = await evalJs(cdp, page, `(window.__wcSentInputs || []).length`);
     const cursorClickPoint = await waitFor(cdp, page, `(() => {
-      const terms = Array.from(document.querySelectorAll('.xterm'))
-        .filter((candidate) => {
-          const rect = candidate.getBoundingClientRect();
-          return rect.width > 0 && rect.height > 0 && getComputedStyle(candidate).visibility !== 'hidden';
-        });
-      const term = terms.find((candidate) => candidate.innerText.includes(${JSON.stringify(INPUT_MARKER)})) || terms.at(-1);
+      const meta = document.querySelector('[data-session-meta="${activeSessionId}"]');
+      const pane = meta?.parentElement?.parentElement;
+      const term = pane?.querySelector('.xterm');
       const screen = term?.querySelector('.xterm-screen') || term;
       const viewport = term?.querySelector('.xterm-viewport') || screen;
       if (!screen || !viewport) return false;
