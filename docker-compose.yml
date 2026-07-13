@@ -15,6 +15,7 @@ services:
       WS_PORT: 8791
       NEXT_PUBLIC_WS_PORT: 8791
       NEXT_PUBLIC_APP_LABEL: Ptylon
+      WEB_CONSOLE_ADMIN_WS_URL: ws://ws:8791
     ports:
       - "${PTYLON_APP_BIND:-127.0.0.1}:8790:8790"
     volumes:
@@ -31,7 +32,7 @@ services:
       timeout: 3s
       retries: 10
       start_period: 15s
-    networks: [ptylon]
+    networks: [edge, ptylon]
 
   ws:
     image: ptylon:local
@@ -53,7 +54,7 @@ services:
       timeout: 3s
       retries: 10
       start_period: 5s
-    networks: [ptylon]
+    networks: [edge, ptylon]
 
   pty:
     image: ptylon:local
@@ -80,5 +81,6 @@ volumes:
   ptylon-workspace:
 
 networks:
+  edge:
   ptylon:
     internal: true
