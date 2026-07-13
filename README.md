@@ -2,7 +2,7 @@
 
 > A self-hosted, browser-native terminal workspace — Termius in a browser tab.
 
-[![CI](https://github.com/alexfrmn/web-console/actions/workflows/ci.yml/badge.svg)](https://github.com/alexfrmn/web-console/actions/workflows/ci.yml)
+[![CI](https://github.com/alexfrmn/ptylon/actions/workflows/ci.yml/badge.svg)](https://github.com/alexfrmn/ptylon/actions/workflows/ci.yml)
 [![Node.js 22+](https://img.shields.io/badge/node-22%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -12,8 +12,8 @@
 workspaces into one browser tab. It is designed for a server you control—not a
 hosted shell service.
 
-| [Quick start](#quick-start) | [Screenshots](#screenshots) | [Architecture](#architecture) | [Production](#production-with-systemd) | [Contributing](CONTRIBUTING.md) |
-| --- | --- | --- | --- | --- |
+| [Quick start](#quick-start) | [Docker](#docker-compose) | [Screenshots](#screenshots) | [Architecture](#architecture) | [Production](#production-with-systemd) | [Contributing](CONTRIBUTING.md) |
+| --- | --- | --- | --- | --- | --- |
 
 ## Why Ptylon
 
@@ -118,6 +118,32 @@ network, set `WS_HOST=0.0.0.0`; binding only to loopback will make the UI show
 
 `GROQ_API_KEY` is optional and only needed for voice transcription.
 
+## Docker Compose
+
+Docker Compose runs the app, WebSocket gateway, and persistent PTY owner as
+separate non-root containers. The gateway shares the PTY container's network
+namespace, so the daemon remains loopback-only. The application database and
+workspace are named volumes.
+
+```bash
+cp .env.example .env
+$EDITOR .env # set unique AUTH_PASSWORD and JWT_SECRET values
+docker compose up --build -d
+docker compose ps
+```
+
+Open `http://127.0.0.1:8790`. A reverse proxy on the same host can forward
+`/` to `127.0.0.1:8790` and `/ws` to `127.0.0.1:8791`. Keep both ports bound to
+loopback unless a trusted proxy runs on another host; configure HTTPS before
+public exposure.
+
+To inspect or stop the stack:
+
+```bash
+docker compose logs -f
+docker compose down
+```
+
 ## Production With Systemd
 
 The supplied units deliberately run as an unprivileged `webconsole` user. Do
@@ -127,8 +153,8 @@ as this account.
 For a clean server, the turnkey path is:
 
 ```bash
-git clone https://github.com/alexfrmn/web-console.git
-cd web-console
+git clone https://github.com/alexfrmn/ptylon.git
+cd ptylon
 sudo ./scripts/install-systemd.sh
 ```
 

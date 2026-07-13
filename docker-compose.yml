@@ -1,0 +1,88 @@
+services:
+  pty:
+    build: .
+    command: ["node", "server/pty-daemon.mjs"]
+    env_file: .env
+    environment:
+      PTY_DAEMON_HOST: 127.0.0.1
+      PTY_DAEMON_PORT: 8792
+      WORKSPACE_ROOT: /workspace
+      ALLOWED_CWD_ROOT: /workspace
+      FILE_ACCESS_ROOT: /workspace
+      UPLOAD_DIR: /workspace/uploads
+      ALLOW_FULL_FILESYSTEM: "false"
+    volumes:
+      - ptylon-workspace:/workspace
+    ports:
+      - "127.0.0.1:8791:8791"
+    init: true
+    restart: unless-stopped
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "node", "-e", "const net=require('net');const s=net.connect(8792,'127.0.0.1');s.on('connect',()=>s.end());s.on('close',()=>process.exit(0));s.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),2000)"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  ws:
+    build: .
+    command: ["node", "server/ws-server.mjs"]
+    env_file: .env
+    environment:
+      WS_HOST: 127.0.0.1
+      WS_PORT: 8791
+      PTY_DAEMON_URL: ws://127.0.0.1:8792
+    network_mode: "service:pty"
+    depends_on:
+      pty:
+        condition: service_healthy
+    init: true
+    restart: unless-stopped
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "node", "-e", "const net=require('net');const s=net.connect(8791,'127.0.0.1');s.on('connect',()=>s.end());s.on('close',()=>process.exit(0));s.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),2000)"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  app:
+    build: .
+    env_file: .env
+    environment:
+      PORT: 8790
+      WEB_CONSOLE_ADMIN_WS_URL: ws://pty:8791
+      WORKSPACE_ROOT: /workspace
+      ALLOWED_CWD_ROOT: /workspace
+      FILE_ACCESS_ROOT: /workspace
+      UPLOAD_DIR: /workspace/uploads
+      ALLOW_FULL_FILESYSTEM: "false"
+      WEB_CONSOLE_DB_PATH: /data/ptylon.db
+    volumes:
+      - ptylon-data:/data
+      - ptylon-workspace:/workspace
+    ports:
+      - "127.0.0.1:8790:8790"
+    depends_on:
+      ws:
+        condition: service_healthy
+    init: true
+    restart: unless-stopped
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:8790',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  ptylon-data:
+  ptylon-workspace:
