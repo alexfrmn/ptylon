@@ -344,8 +344,8 @@ export function startWsServer() {
       }
     });
 
-    ws.on('close', () => {
-      console.log('[WS] Client disconnected');
+    ws.on('close', (code, reason) => {
+      console.log(`[WS] Client disconnected code=${code} reason=${reason.toString() || '-'}`);
       detachClient(ws);
     });
 

@@ -55,6 +55,8 @@ AUTH_PASSWORD=change-me
 JWT_SECRET=replace-with-a-long-random-secret
 PORT=8790
 WS_PORT=8791
+# Set 0.0.0.0 when a reverse proxy on another host forwards /ws to this gateway.
+WS_HOST=127.0.0.1
 NEXT_PUBLIC_WS_PORT=8791
 PTY_DAEMON_HOST=127.0.0.1
 PTY_DAEMON_PORT=8792
@@ -70,6 +72,10 @@ NEXT_PUBLIC_APP_LABEL=Web Console
 # CHROME=/usr/bin/google-chrome
 # WEB_CONSOLE_BROWSER_SESSION_TTL_MS=600000
 ```
+
+When Nginx Proxy Manager or another reverse proxy reaches the gateway over the
+network, set `WS_HOST=0.0.0.0`; binding only to loopback will make the UI show
+`Disconnected` even though the HTTP application remains healthy.
 
 `GROQ_API_KEY` is optional and only needed for voice transcription.
 

@@ -68,7 +68,15 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const token = req.cookies.get('wc-token')?.value;
   if (!token || !verifyToken(token)) {
-    return NextResponse.json({ authenticated: false }, { status: 401 });
+    const response = NextResponse.json({ authenticated: false }, { status: 401 });
+    response.cookies.set('wc-token', '', {
+      httpOnly: true,
+      secure: shouldUseSecureCookie(req),
+      sameSite: 'lax',
+      maxAge: 0,
+      path: '/',
+    });
+    return response;
   }
   return NextResponse.json({ authenticated: true, wsToken: token });
 }

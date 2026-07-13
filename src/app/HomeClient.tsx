@@ -152,6 +152,10 @@ export default function Home() {
           // Load state from server (cross-device sync)
           await useWorkspaceStore.getState().syncFromServer();
           setServerSynced(true);
+        } else {
+          // Do not retain a client-side login after the server rejects an
+          // expired or rotated token; otherwise the UI loops on a closed WS.
+          setAuth(false);
         }
       })
       .catch(() => {})
