@@ -1,6 +1,6 @@
 {
   "name": "Ptylon",
-  "short_name": "Console",
+  "short_name": "Ptylon",
   "description": "Browser-based terminal workspace",
   "start_url": "/",
   "display": "standalone",
