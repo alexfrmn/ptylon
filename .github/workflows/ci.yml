@@ -76,7 +76,7 @@ jobs:
           export AUTH_PASSWORD=ci-docker-password
           export JWT_SECRET=ci-docker-jwt-secret
           export WEB_CONSOLE_ADMIN_TOKEN=ci-docker-admin-token
-          trap 'docker compose down -v --remove-orphans' EXIT
+          trap 'docker compose ps; docker compose logs --no-color || true; docker compose down -v --remove-orphans' EXIT
           docker compose up --build -d
           for _ in $(seq 1 60); do
             if curl --fail --silent http://127.0.0.1:8790/api/auth >/dev/null; then break; fi
