@@ -1,0 +1,12 @@
+.git
+.github
+.next
+node_modules
+.env
+data
+docs/images
+*.db
+*.db-*
+*.log
+Dockerfile*
+docker-compose*.override.yml
