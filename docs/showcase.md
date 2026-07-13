@@ -16,9 +16,9 @@ pnpm capture:showcase
 
 The command writes these files to `docs/images/`:
 
-- `web-console-workspace.png`
-- `web-console-theme-gallery.png`
-- `web-console-mobile.png`
+- `ptylon-workspace.png`
+- `ptylon-theme-gallery.png`
+- `ptylon-mobile.png`
 
 The capture helper replaces the terminal prompt with a neutral display prompt.
 Still inspect every generated image before publishing: never commit screenshots

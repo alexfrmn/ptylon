@@ -58,14 +58,14 @@ async function main() {
     await page.keyboard.type('printf "Persistent shells. Focused workspaces."');
     await page.keyboard.press('Enter');
     await page.waitForTimeout(600);
-    await page.screenshot({ path: resolve(OUT_DIR, 'web-console-workspace.png'), fullPage: true });
+    await page.screenshot({ path: resolve(OUT_DIR, 'ptylon-workspace.png'), fullPage: true });
 
     await page.locator('button[title="Open theme gallery"]').click();
     await page.getByText('Theme Gallery', { exact: true }).waitFor({ state: 'visible', timeout: 10_000 });
-    await page.screenshot({ path: resolve(OUT_DIR, 'web-console-theme-gallery.png'), fullPage: true });
+    await page.screenshot({ path: resolve(OUT_DIR, 'ptylon-theme-gallery.png'), fullPage: true });
 
     await page.setViewportSize({ width: 430, height: 920 });
-    await page.screenshot({ path: resolve(OUT_DIR, 'web-console-mobile.png'), fullPage: true });
+    await page.screenshot({ path: resolve(OUT_DIR, 'ptylon-mobile.png'), fullPage: true });
     console.log(JSON.stringify({ baseUrl: BASE_URL, outDir: OUT_DIR, captures: 3 }));
   } finally {
     await browser.close();

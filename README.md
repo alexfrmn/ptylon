@@ -6,14 +6,14 @@
 [![Node.js 22+](https://img.shields.io/badge/node-22%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-![Ptylon workspace with persistent terminal panes](docs/images/web-console-workspace.png)
+![Ptylon workspace with persistent terminal panes](docs/images/ptylon-workspace.png)
 
 **Ptylon** brings persistent terminals, browser tools, files, editing, and
 workspaces into one browser tab. It is designed for a server you control—not a
 hosted shell service.
 
 | [Quick start](#quick-start) | [Screenshots](#screenshots) | [Architecture](#architecture) | [Production](#production-with-systemd) | [Contributing](CONTRIBUTING.md) |
-| --- | --- | --- | --- |
+| --- | --- | --- | --- | --- |
 
 ## Why Ptylon
 
@@ -28,8 +28,8 @@ hosted shell service.
 ## Screenshots
 
 <p align="center">
-  <img src="docs/images/web-console-theme-gallery.png" alt="Ptylon theme gallery" width="49%" />
-  <img src="docs/images/web-console-mobile.png" alt="Ptylon responsive mobile layout" width="29%" />
+  <img src="docs/images/ptylon-theme-gallery.png" alt="Ptylon theme gallery" width="49%" />
+  <img src="docs/images/ptylon-mobile.png" alt="Ptylon responsive mobile layout" width="29%" />
 </p>
 
 Browser terminal workspace: xterm.js terminals, server-rendered browser tabs,
@@ -196,7 +196,7 @@ pnpm test:browser-regression
 
 `pnpm test:pty-gateway` starts a temporary PTY daemon and gateway, creates a shell, restarts only the gateway, reattaches to the original session, and verifies scrollback/output still works.
 
-`pnpm test:browser-regression` drives a headless Chrome against a running Web Console instance. It verifies manual auth, terminal creation, terminal connection, terminal input echo, click-to-cursor arrow input, live session metadata, OSC notifications, recipes, mobile-reachable workspace actions, theme gallery apply/reset with server-side theme sync, server-side browser panel rendering, visible browser click/type input, and shared UI/admin browser sessions. By default it targets `http://127.0.0.1:8790` and `ws://127.0.0.1:8791`, and reads `AUTH_PASSWORD` from `.env`; override with `WC_BASE_URL`, `WC_WS_URL`, `WC_AUTH_PASSWORD`, `WC_ADMIN_TOKEN`, `CHROME`, or `WC_REGRESSION_OUT`.
+`pnpm test:browser-regression` drives a headless Chrome against a running Ptylon instance. It verifies manual auth, terminal creation, terminal connection, terminal input echo, click-to-cursor arrow input, live session metadata, OSC notifications, recipes, mobile-reachable workspace actions, theme gallery apply/reset with server-side theme sync, server-side browser panel rendering, visible browser click/type input, and shared UI/admin browser sessions. By default it targets `http://127.0.0.1:8790` and `ws://127.0.0.1:8791`, and reads `AUTH_PASSWORD` from `.env`; override with `WC_BASE_URL`, `WC_WS_URL`, `WC_AUTH_PASSWORD`, `WC_ADMIN_TOKEN`, `CHROME`, or `WC_REGRESSION_OUT`.
 
 `pnpm test:playwright-smoke` is a smaller browser proof: it verifies application login, a visible `Connected` terminal state, and a browser WebSocket attach. To validate a reverse proxy protected with HTTP Basic Auth, run it with `WC_BASE_URL=https://console.example.com WC_BASIC_USER=... WC_BASIC_PASS=... pnpm test:playwright-smoke`. Keep those credentials outside the repository.
 
@@ -266,7 +266,7 @@ There are two browser APIs:
 - `/api/browser` is for the logged-in UI. It uses normal app auth and does not expose the admin token to client JavaScript.
 - `/api/admin/browser` is for localhost scripts and agents. It is loopback-only and token-guarded by `WEB_CONSOLE_ADMIN_TOKEN` or `JWT_SECRET`.
 
-`localhost` inside a browser panel means localhost on the Web Console server, not on the laptop or phone viewing the UI. Use `pnpm webc browser panel --local <port>` for server-local previews.
+`localhost` inside a browser panel means localhost on the Ptylon server, not on the laptop or phone viewing the UI. Use `pnpm webc browser panel --local <port>` for server-local previews.
 
 Visible panel frames use compressed JPEG by default. Idle active tabs poll slowly, loading tabs poll faster, typed text is batched, and wheel events are throttled. This keeps the panel usable for dogfooding, but it is still a screenshot-polling surface, not a video/WebRTC stream.
 
