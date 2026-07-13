@@ -2,7 +2,7 @@
 
 > A self-hosted, browser-native terminal workspace — Termius in a browser tab.
 
-[![CI](https://github.com/alexfrmn/web-console/actions/workflows/ci.yml/badge.svg)](https://github.com/alexfrmn/web-console/actions/workflows/ci.yml)
+[![CI](https://github.com/alexfrmn/ptylon/actions/workflows/ci.yml/badge.svg)](https://github.com/alexfrmn/ptylon/actions/workflows/ci.yml)
 [![Node.js 22+](https://img.shields.io/badge/node-22%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -12,7 +12,7 @@
 workspaces into one browser tab. It is designed for a server you control—not a
 hosted shell service.
 
-| [Quick start](#quick-start) | [Screenshots](#screenshots) | [Architecture](#architecture) | [Production](#production-with-systemd) | [Contributing](CONTRIBUTING.md) |
+| [Quick start](#quick-start) | [Docker](#docker-compose) | [Architecture](#architecture) | [Production](#production-with-systemd) | [Contributing](CONTRIBUTING.md) |
 | --- | --- | --- | --- | --- |
 
 ## Why Ptylon
@@ -40,8 +40,6 @@ The production architecture keeps shell processes outside the browser WebSocket
 gateway. A long-lived PTY daemon owns `node-pty` sessions; the authenticated
 WebSocket gateway only proxies terminal I/O. This lets the gateway restart
 without killing running shells.
-
-## At a Glance
 
 ## Architecture
 
@@ -74,6 +72,34 @@ web-console-pty.service  localhost-only PTY daemon, port 8792
 - Build tools needed by `node-pty`
 
 ## Quick Start
+
+### Docker Compose
+
+The recommended self-hosted path is Docker Compose. All three runtime services
+run as an unprivileged `ptylon` user; application state and the workspace live
+in named volumes.
+
+```bash
+git clone https://github.com/alexfrmn/ptylon.git
+cd ptylon
+cp .env.example .env
+$EDITOR .env # set strong AUTH_PASSWORD, JWT_SECRET, and WEB_CONSOLE_ADMIN_TOKEN
+docker compose up -d --build
+docker compose ps
+```
+
+By default, the app (`8790`) and WebSocket gateway (`8791`) bind only to
+`127.0.0.1`. Put HTTPS and an access gate in a local reverse proxy. If the
+reverse proxy is on another host, set `PTYLON_APP_BIND=0.0.0.0` and
+`PTYLON_WS_BIND=0.0.0.0`, then firewall both ports so only that proxy can reach
+them. The PTY daemon is never published; it is reachable only on the private
+Compose network.
+
+For upgrades, run `git pull && docker compose up -d --build`. Do not run
+`docker compose down -v` unless you intentionally want to destroy workspace and
+SQLite state.
+
+### Manual local run
 
 ```bash
 cp .env.example .env
@@ -127,8 +153,8 @@ as this account.
 For a clean server, the turnkey path is:
 
 ```bash
-git clone https://github.com/alexfrmn/web-console.git
-cd web-console
+git clone https://github.com/alexfrmn/ptylon.git
+cd ptylon
 sudo ./scripts/install-systemd.sh
 ```
 

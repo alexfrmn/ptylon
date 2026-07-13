@@ -1,0 +1,84 @@
+name: ptylon
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+    image: ptylon:local
+    restart: unless-stopped
+    environment:
+      AUTH_PASSWORD: ${AUTH_PASSWORD:?set AUTH_PASSWORD in .env}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      WEB_CONSOLE_ADMIN_TOKEN: ${WEB_CONSOLE_ADMIN_TOKEN:?set WEB_CONSOLE_ADMIN_TOKEN in .env}
+      PORT: 8790
+      WS_PORT: 8791
+      NEXT_PUBLIC_WS_PORT: 8791
+      NEXT_PUBLIC_APP_LABEL: Ptylon
+    ports:
+      - "${PTYLON_APP_BIND:-127.0.0.1}:8790:8790"
+    volumes:
+      - ptylon-data:/data
+      - ptylon-workspace:/workspace
+    depends_on:
+      pty:
+        condition: service_healthy
+      ws:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8790/api/auth').then(() => process.exit(0)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+    networks: [ptylon]
+
+  ws:
+    image: ptylon:local
+    restart: unless-stopped
+    command: ["node", "server/ws-server.mjs"]
+    environment:
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      WS_HOST: 0.0.0.0
+      WS_PORT: 8791
+      PTY_DAEMON_URL: ws://pty:8792
+    ports:
+      - "${PTYLON_WS_BIND:-127.0.0.1}:8791:8791"
+    depends_on:
+      pty:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('net').connect(8791, '127.0.0.1').on('connect', () => process.exit(0)).on('error', () => process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    networks: [ptylon]
+
+  pty:
+    image: ptylon:local
+    restart: unless-stopped
+    command: ["node", "server/pty-daemon.mjs"]
+    environment:
+      PTY_DAEMON_HOST: 0.0.0.0
+      PTY_DAEMON_PORT: 8792
+      PTY_DAEMON_ALLOW_NETWORK: "true"
+      WORKSPACE_ROOT: /workspace
+      PTY_IDLE_TIMEOUT_HOURS: ${PTY_IDLE_TIMEOUT_HOURS:-168}
+    volumes:
+      - ptylon-workspace:/workspace
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('net').connect(8792, '127.0.0.1').on('connect', () => process.exit(0)).on('error', () => process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    networks: [ptylon]
+
+volumes:
+  ptylon-data:
+  ptylon-workspace:
+
+networks:
+  ptylon:
+    internal: true

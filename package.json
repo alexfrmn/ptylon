@@ -14,6 +14,7 @@
     "start:ws": "node --env-file=.env server/ws-server.mjs",
     "start:pty": "node --env-file=.env server/pty-daemon.mjs",
     "test:pty-gateway": "node scripts/smoke-pty-gateway.mjs",
+    "test:pty-network-policy": "node scripts/test-pty-network-policy.mjs",
     "test:browser-regression": "node scripts/browser-regression.mjs",
     "test:playwright-smoke": "node scripts/playwright-smoke.mjs",
     "capture:showcase": "node scripts/capture-showcase.mjs",

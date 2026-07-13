@@ -7,9 +7,11 @@
 
 import { WebSocketServer } from 'ws';
 import { ptyManager } from './pty-manager.mjs';
+import { isAllowedPtyClient } from './pty-network-policy.mjs';
 
 const PTY_DAEMON_HOST = process.env.PTY_DAEMON_HOST || '127.0.0.1';
 const PTY_DAEMON_PORT = parseInt(process.env.PTY_DAEMON_PORT || '8792', 10);
+const PTY_DAEMON_ALLOW_NETWORK = process.env.PTY_DAEMON_ALLOW_NETWORK === 'true';
 
 const clientSessions = new Map(); // ws -> Set<sessionId>
 const sessionClients = new Map(); // sessionId -> Set<ws>
@@ -89,7 +91,7 @@ export function startPtyDaemon() {
 
   wss.on('connection', (ws, req) => {
     const remote = req.socket.remoteAddress;
-    if (remote !== '127.0.0.1' && remote !== '::1' && remote !== '::ffff:127.0.0.1') {
+    if (!isAllowedPtyClient(remote, PTY_DAEMON_ALLOW_NETWORK)) {
       send(ws, { type: 'error', data: 'PTY daemon accepts localhost clients only' });
       ws.close(4003, 'Forbidden');
       return;
