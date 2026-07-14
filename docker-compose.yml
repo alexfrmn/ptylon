@@ -76,7 +76,8 @@ services:
       timeout: 3s
       retries: 10
       start_period: 5s
-    networks: [ptylon]
+    # PTY remains un-published; this network only gives spawned shells outbound access.
+    networks: [egress, ptylon]
 
 volumes:
   ptylon-data:
@@ -84,5 +85,6 @@ volumes:
 
 networks:
   edge:
+  egress:
   ptylon:
     internal: true
