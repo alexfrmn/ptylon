@@ -25,6 +25,38 @@ async function saveTranscript(text: string): Promise<void> {
   }
 }
 
+// Whisper на пустой дорожке отдаёт фразы из титров обучающих данных
+// («Продолжение следует...», «Субтитры сделал...»). 02.09.2026 такая строка
+// ушла в терминал вместо двухминутной надиктовки Alex. Зеркало
+// is_silence_artifact() из dorfa-portal-worker/attachments.py.
+const SILENCE_MARKERS = [
+  'продолжение следует', 'субтитры сделал', 'субтитры создавал',
+  'редактор субтитров', 'спасибо за просмотр', 'подписывайтесь на канал',
+  'субтитры и перевод', 'thanks for watching', 'subtitles by',
+];
+
+function isSilenceArtifact(text: string): boolean {
+  const cleaned = (text || '').toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!cleaned) return true;
+  let residue = cleaned;
+  let hit = false;
+  for (const marker of SILENCE_MARKERS) {
+    if (residue.includes(marker)) {
+      hit = true;
+      residue = residue.split(marker).join(' ');
+    }
+  }
+  if (!hit) return false;
+  const denseAll = cleaned.replace(/\s+/g, '').length;
+  const denseLeft = residue.replace(/\s+/g, '').length;
+  // Короткая реплика с маркером — всегда титры. Длинная считается речью,
+  // только если своего текста осталось больше половины.
+  return denseAll < 60 || denseLeft < denseAll * 0.5;
+}
+
 export async function POST(req: NextRequest) {
   // Auth check
   const token = req.cookies.get('wc-token')?.value;
@@ -66,9 +98,14 @@ export async function POST(req: NextRequest) {
     }
 
     const data = await res.json();
-    const text = data.text || '';
-    await saveTranscript(text.trim());
-    return NextResponse.json({ text });
+    const raw = String(data.text || '').trim();
+    // В журнал — как пришло (для разбора), в терминал — только речь.
+    await saveTranscript(raw);
+    if (isSilenceArtifact(raw)) {
+      console.warn('[Transcribe] silence artifact dropped:', raw.slice(0, 80));
+      return NextResponse.json({ text: '', silence: true });
+    }
+    return NextResponse.json({ text: raw });
   } catch (err) {
     console.error('[Transcribe] Error:', err);
     return NextResponse.json({ error: 'Internal error' }, { status: 500 });
