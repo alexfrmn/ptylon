@@ -19,7 +19,8 @@
     "test:playwright-smoke": "node scripts/playwright-smoke.mjs",
     "capture:showcase": "node scripts/capture-showcase.mjs",
     "webc": "node bin/webc.mjs",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:terminal-input": "node scripts/terminal-input-regression.mjs"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",

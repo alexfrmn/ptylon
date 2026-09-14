@@ -5,6 +5,7 @@ import type { Terminal } from '@xterm/xterm';
 import type { ITheme } from '@xterm/xterm';
 import type { FitAddon } from '@xterm/addon-fit';
 import { extractTerminalNotifications, type Osc99State, type TerminalNotificationPayload } from '@/lib/terminal-notifications';
+import { useWorkspaceStore } from '@/stores/workspace-store';
 
 interface TerminalPanelProps {
   sessionId: string | null;
@@ -17,21 +18,6 @@ interface TerminalPanelProps {
 }
 
 const DEFAULT_UPLOAD_DIR = process.env.NEXT_PUBLIC_UPLOAD_DIR || '';
-
-interface XtermRenderDimensions {
-  css?: {
-    cell?: {
-      width?: number;
-      height?: number;
-    };
-  };
-}
-
-interface XtermInternalCore {
-  _renderService?: {
-    dimensions?: XtermRenderDimensions;
-  };
-}
 
 function cssVar(name: string, fallback: string) {
   if (typeof window === 'undefined') return fallback;
@@ -94,7 +80,7 @@ export default function TerminalPanel({ sessionId, ws, isActive, onSessionCreate
     if (!containerRef.current) return;
 
     let disposed = false;
-    let cleanupClickHandlers: (() => void) | null = null;
+    let cleanupPasteHandler: (() => void) | null = null;
     let resizeObserver: ResizeObserver | null = null;
     let resizeTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -205,75 +191,25 @@ export default function TerminalPanel({ sessionId, ws, isActive, onSessionCreate
         if (!sock || sock.readyState !== WebSocket.OPEN || !sid) return;
         try {
           const text = await navigator.clipboard.readText();
-          if (text) {
-            sock.send(JSON.stringify({ type: 'input', sessionId: sid, data: text }));
+          if (text && !disposed && wsRef.current === sock && sessionIdRef.current === sid) {
+            // Long-lived Codex sessions can lose their initial mode sequence from
+            // bounded scrollback. Recover it from live process metadata on paste.
+            const activeCommand = useWorkspaceStore.getState().sessionMetadata[sid]?.activeCommand;
+            if (!term.modes.bracketedPasteMode && activeCommand === 'codex') {
+              await new Promise<void>((resolve) => term.write('\x1b[?2004h', resolve));
+            }
+            if (disposed || wsRef.current !== sock || sessionIdRef.current !== sid) return;
+            // Preserve bracketed-paste framing so newlines/tabs remain draft text.
+            term.paste(text);
+            term.focus();
           }
         } catch { /* clipboard access denied */ }
       };
-      containerRef.current!.addEventListener('contextmenu', onContextMenu);
-
-      // Click-to-position cursor: document-level CAPTURE phase
-      // xterm.js stopPropagation() on its elements — only capture phase works reliably
-      let mouseDownX = 0, mouseDownY = 0;
       const container = containerRef.current!;
-      const onDocMouseDown = (e: MouseEvent) => {
-        if (!container.contains(e.target as Node)) return;
-        if (e.button === 0) { mouseDownX = e.clientX; mouseDownY = e.clientY; }
-      };
-      const onDocMouseUp = (e: MouseEvent) => {
-        if (!container.contains(e.target as Node)) return;
-        if (e.button !== 0) return;
-        if (Math.abs(e.clientX - mouseDownX) > 5 || Math.abs(e.clientY - mouseDownY) > 5) return;
-
-        // Delay to let xterm finalize selection state
-        setTimeout(() => {
-          const sock = wsRef.current;
-          const sid = sessionIdRef.current;
-          if (!sock || sock.readyState !== WebSocket.OPEN || !sid) {
-            return;
-          }
-          const sel = term.getSelection();
-          if (sel?.length) {
-            return;
-          }
-
-          const el = term.element;
-          if (!el) return;
-
-          // Get EXACT cell dimensions from xterm internals (same as xterm's own mouse handling)
-          const core = (term as unknown as { _core?: XtermInternalCore })._core;
-          const dims = core?._renderService?.dimensions?.css?.cell;
-
-          // Use .xterm-viewport as coordinate reference (not .xterm-screen which includes scrollback!)
-          const viewportEl = el.querySelector('.xterm-viewport') as HTMLElement;
-          if (!viewportEl) return;
-          const rect = viewportEl.getBoundingClientRect();
-
-          const cellWidth = dims?.width || (term.cols > 0 ? rect.width / term.cols : 0);
-          const cellHeight = dims?.height || (term.rows > 0 ? rect.height / term.rows : 0);
-          if (!cellWidth || !cellHeight) return;
-
-          const clickCol = Math.floor((e.clientX - rect.left) / cellWidth);
-          const clickRow = Math.floor((e.clientY - rect.top) / cellHeight);
-          if (clickRow < 0 || clickRow >= term.rows || clickCol < 0 || clickCol >= term.cols) return;
-
-          const cursorY = term.buffer.active.cursorY;
-          const cursorX = term.buffer.active.cursorX;
-
-          const clickOffset = clickRow * term.cols + clickCol;
-          const cursorOffset = cursorY * term.cols + cursorX;
-          const delta = clickOffset - cursorOffset;
-          if (delta === 0) return;
-
-          const arrow = delta > 0 ? '\x1b[C' : '\x1b[D';
-          sock.send(JSON.stringify({ type: 'input', sessionId: sid, data: arrow.repeat(Math.abs(delta)) }));
-        }, 50);
-      };
-      document.addEventListener('mousedown', onDocMouseDown, true);
-      document.addEventListener('mouseup', onDocMouseUp, true);
-      cleanupClickHandlers = () => {
-        document.removeEventListener('mousedown', onDocMouseDown, true);
-        document.removeEventListener('mouseup', onDocMouseUp, true);
+      container.addEventListener('contextmenu', onContextMenu);
+      // Let xterm handle focus, selection and application mouse reporting. Plain
+      // clicks must not synthesize arrows: TUIs also use them as navigation keys.
+      cleanupPasteHandler = () => {
         container.removeEventListener('contextmenu', onContextMenu);
       };
 
@@ -324,7 +260,7 @@ export default function TerminalPanel({ sessionId, ws, isActive, onSessionCreate
 
     return () => {
       disposed = true;
-      cleanupClickHandlers?.();
+      cleanupPasteHandler?.();
       resizeObserver?.disconnect();
       if (resizeTimer) clearTimeout(resizeTimer);
       termRef.current?.dispose();

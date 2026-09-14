@@ -68,6 +68,7 @@ jobs:
           trap 'kill "$app_pid" "$ws_pid" "$pty_pid" 2>/dev/null || true' EXIT
           for _ in $(seq 1 30); do curl --fail --silent http://127.0.0.1:8790/api/auth >/dev/null && break; sleep 1; done
           pnpm test:browser-regression
+          pnpm test:terminal-input
 
       - name: Docker Compose smoke
         run: |
