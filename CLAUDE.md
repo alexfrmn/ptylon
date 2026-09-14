@@ -265,9 +265,9 @@ The 2026-05-01 incident was caused by skipping this server sync. Browser `localS
 
 `navigator.clipboard.writeText()` from `onSelectionChange` is best-effort only because browsers require user activation. Ctrl+Shift+C is the reliable copy path.
 
-### Click-To-Cursor
+### Terminal Mouse Input
 
-Click-to-cursor across wrapped lines is covered by `pnpm test:browser-regression`. Keep that check passing before changing the terminal click handler.
+Plain clicks must only focus/select; never synthesize arrow keys from screen coordinates, because TUIs use arrows for navigation. Right-click text must use `term.paste()` to preserve bracketed-paste framing. These behaviors and Escape delivery are covered by `pnpm test:browser-regression`. `pnpm test:terminal-input` also checks native selection and Codex paste after truncated scrollback, using the deployed frontend with isolated API/WebSocket mocks. When live process metadata identifies Codex, recover missing bracketed-paste mode before pasting; respect other applications’ mode.
 
 ### Attention Notifications
 

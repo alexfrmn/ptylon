@@ -319,75 +319,51 @@ async function main() {
     await sendSessionInputAndWaitForOutput(wsToken, activeSessionId, longCommand, INPUT_MARKER);
     report.checks.push('terminal input echoed to browser');
 
-    const sentInputCountBeforeCursorClick = await evalJs(cdp, page, `(window.__wcSentInputs || []).length`);
-    const cursorClickPoint = await waitFor(cdp, page, `(() => {
+    const sentInputCountBeforeClick = await evalJs(cdp, page, `(window.__wcSentInputs || []).length`);
+    const terminalBounds = await evalJs(cdp, page, `(() => {
       const meta = document.querySelector('[data-session-meta="${activeSessionId}"]');
-      const pane = meta?.parentElement?.parentElement;
-      const term = pane?.querySelector('.xterm');
-      const screen = term?.querySelector('.xterm-screen') || term;
-      const viewport = term?.querySelector('.xterm-viewport') || screen;
-      if (!screen || !viewport) return false;
-      const screenRect = screen.getBoundingClientRect();
-      const viewportRect = viewport.getBoundingClientRect();
-      const cursorRect = term.querySelector('.xterm-cursor')?.getBoundingClientRect();
-      if (cursorRect && cursorRect.width > 0 && cursorRect.height > 0) {
-        const cellWidth = Math.max(6, cursorRect.width);
-        const x = Math.max(screenRect.left + cellWidth, cursorRect.left - cellWidth * 8);
-        const y = cursorRect.top + cursorRect.height / 2;
-        if (x >= screenRect.left && x <= screenRect.right && y >= screenRect.top && y <= screenRect.bottom) return { x, y };
-      }
-      return { x: screenRect.left + Math.max(20, screenRect.width * 0.2), y: viewportRect.bottom - 20 };
-    })()`, 'terminal cursor click target');
-    await evalJs(cdp, page, `(() => {
-      window.__wcClickProbe = [];
-      const record = (event) => {
-        const element = document.elementFromPoint(event.clientX, event.clientY);
-        window.__wcClickProbe.push({
-          type: event.type,
-          x: event.clientX,
-          y: event.clientY,
-          button: event.button,
-          target: event.target?.className || event.target?.tagName || '',
-          targetInXterm: Boolean(event.target?.closest?.('.xterm')),
-          element: element?.className || element?.tagName || '',
-          elementInXterm: Boolean(element?.closest?.('.xterm')),
-        });
-      };
-      document.addEventListener('mousedown', record, true);
-      document.addEventListener('mouseup', record, true);
+      const term = meta?.parentElement?.parentElement?.querySelector('.xterm');
+      const rect = term?.querySelector('.xterm-screen')?.getBoundingClientRect();
+      return rect ? { left: rect.left, top: rect.top, width: rect.width, height: rect.height } : null;
     })()`);
-    await click(cdp, page, cursorClickPoint.x, cursorClickPoint.y);
-    try {
-      await waitFor(cdp, page, `(() => {
-        const sent = (window.__wcSentInputs || []).slice(${sentInputCountBeforeCursorClick});
-        return sent.some((msg) => msg.sessionId === ${JSON.stringify(activeSessionId)}
-          && (String(msg.data || '').includes('\\u001b[C') || String(msg.data || '').includes('\\u001b[D')));
-      })()`, 'click-to-cursor arrow input sent');
-    } catch (error) {
-      const debug = await evalJs(cdp, page, `(() => ({
-        sentInputs: (window.__wcSentInputs || []).slice(${sentInputCountBeforeCursorClick}),
-        clickProbe: window.__wcClickProbe || [],
-        elementAtClick: (() => {
-          const element = document.elementFromPoint(${cursorClickPoint.x}, ${cursorClickPoint.y});
-          return {
-            target: element?.className || element?.tagName || '',
-            inXterm: Boolean(element?.closest?.('.xterm')),
-            text: element?.innerText?.slice?.(0, 240) || ''
-          };
-        })(),
-        cursorRects: Array.from(document.querySelectorAll('.xterm-cursor')).map((el) => {
-          const rect = el.getBoundingClientRect();
-          return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
-        }),
-        xtermRects: Array.from(document.querySelectorAll('.xterm')).map((el) => {
-          const rect = el.getBoundingClientRect();
-          return { left: rect.left, top: rect.top, width: rect.width, height: rect.height, text: el.innerText.slice(0, 240) };
-        })
-      }))()`).catch((err) => ({ evalError: err.message }));
-      await writeFile(join(OUT_DIR, 'click-to-cursor-debug.json'), JSON.stringify({ activeSessionId, cursorClickPoint, debug }, null, 2));
-      throw error;
+    assert(terminalBounds, 'terminal bounds missing');
+    for (const fraction of [0.1, 0.5, 0.9]) {
+      await click(cdp, page, terminalBounds.left + 80, terminalBounds.top + terminalBounds.height * fraction);
+      await delay(150);
     }
-    report.checks.push('click-to-cursor sends arrow-key input');
+    const clickInputs = await evalJs(cdp, page, `(window.__wcSentInputs || []).slice(${sentInputCountBeforeClick})`);
+    assert(clickInputs.length === 0, 'plain terminal clicks must not synthesize keyboard input');
+    assert(await evalJs(cdp, page, `document.activeElement?.classList.contains('xterm-helper-textarea')`), 'click did not focus terminal input');
+    report.checks.push('plain clicks across terminal output focus input without sending arrow keys');
+
+    const pastedText = `First paragraph\n\tIndented paragraph\r\n${'Большой материал '.repeat(120)}\n`;
+    await evalJs(cdp, page, `Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+      readText: async () => ${JSON.stringify(pastedText)}, writeText: async () => {}
+    } })`);
+    const pastedCount = await evalJs(cdp, page, `(window.__wcSentInputs || []).length`);
+    await cdp.call('Input.dispatchMouseEvent', { type: 'mousePressed', x: focusPoint.x, y: focusPoint.y, button: 'right', clickCount: 1 }, page.sessionId);
+    await cdp.call('Input.dispatchMouseEvent', { type: 'mouseReleased', x: focusPoint.x, y: focusPoint.y, button: 'right', clickCount: 1 }, page.sessionId);
+    await waitFor(cdp, page, `(window.__wcSentInputs || []).length > ${pastedCount}`, 'right-click paste sent');
+    const pastedInputs = await evalJs(cdp, page, `(window.__wcSentInputs || []).slice(${pastedCount})`);
+    assert(pastedInputs.length === 1, 'right-click paste must be one input event');
+    assert(pastedInputs[0].sessionId === activeSessionId, 'paste targeted wrong terminal');
+    assert(pastedInputs[0].data === `\x1b[200~${pastedText.replace(/\r?\n/g, '\r')}\x1b[201~`, 'right-click paste lost framing or content');
+    // Append a comment without submitting; only an explicit Enter may submit it.
+    await cdp.call('Input.insertText', { text: 'My comment: handle this together.' }, page.sessionId);
+    await delay(150);
+    const draftInputs = await evalJs(cdp, page, `(window.__wcSentInputs || []).slice(${pastedCount + 1})`);
+    assert(draftInputs.map((msg) => msg.data).join('') === 'My comment: handle this together.', 'comment was not appended intact');
+    report.checks.push('large right-click paste preserves tabs/newlines in one bracketed block and accepts an appended comment');
+    // Discard the test draft; never execute clipboard contents in the test shell.
+    await sendSessionInput(wsToken, activeSessionId, '\u0003');
+
+    const beforeEscape = await evalJs(cdp, page, `(window.__wcSentInputs || []).length`);
+    await cdp.call('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 }, page.sessionId);
+    await cdp.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 }, page.sessionId);
+    await delay(150);
+    const escapeInputs = await evalJs(cdp, page, `(window.__wcSentInputs || []).slice(${beforeEscape})`);
+    assert(escapeInputs.length === 1 && escapeInputs[0].data === '\u001b', 'Escape must reach terminal once');
+    report.checks.push('Escape reaches terminal once after mouse focus');
 
     await sendSessionInput(wsToken, activeSessionId, `\u0015cd ${shellQuote(PROJECT_ROOT)}\r`);
     await waitFor(cdp, page, `Array.from(document.querySelectorAll('[data-session-meta="${activeSessionId}"]')).some((el) => el.textContent.includes(${JSON.stringify(PROJECT_ROOT_NAME)}))`, 'session metadata surfaced');
